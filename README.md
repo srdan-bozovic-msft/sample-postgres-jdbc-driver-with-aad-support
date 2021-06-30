@@ -1,0 +1,1 @@
+# sample-postgres-jdbc-driver-with-aad-support
