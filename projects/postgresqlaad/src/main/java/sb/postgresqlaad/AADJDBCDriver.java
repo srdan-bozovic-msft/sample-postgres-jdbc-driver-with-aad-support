@@ -15,10 +15,10 @@ import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Properties;
+import java.util.*;
 import java.util.logging.Logger;
+
+import com.microsoft.aad.msal4j.*;
 
 public class AADJDBCDriver implements java.sql.Driver {
 
@@ -31,6 +31,7 @@ public class AADJDBCDriver implements java.sql.Driver {
   private final static String PROPERTY_USER = "user";
   private final static String PROPERTY_AAD_AUTHENTICATION = "aadAuthentication";
   private final static String PROPERTY_AAD_CLIENT_ID = "aadClientId";
+  private final static String PROPERTY_AAD_AUTHORITY = "aadAuthority";
 
   private final static String POSTGRESQL_DRIVER_ALIAS = ":postgresql:";
   private final static String POSTGRESQL_DRIVER_CLASS= "org.postgresql.Driver";
@@ -44,12 +45,13 @@ public class AADJDBCDriver implements java.sql.Driver {
   }
 
   private Driver _postgreSqlDriver;
+  private PublicClientApplication _publicClientApplication;
 
   public AADJDBCDriver() throws ClassNotFoundException, IllegalAccessException, InstantiationException {
     _postgreSqlDriver = (Driver) Class.forName(POSTGRESQL_DRIVER_CLASS).newInstance();
   }
 
-  public static String generateAuthToken(String clientId) {
+  public static String generateAuthTokenManagedIdentity(String clientId) {
     try
     {
         String token = null;
@@ -95,6 +97,54 @@ public class AADJDBCDriver implements java.sql.Driver {
     }        
   }
 
+  public String generateAuthTokenInteractive(String authority) {
+    try
+    { 
+        if(_publicClientApplication == null){
+            _publicClientApplication = PublicClientApplication.builder("1950a258-227b-4e31-a9cf-717495945fc2")
+                .authority(authority)
+                .build();        
+        }
+
+        Set<IAccount> accountsInCache = _publicClientApplication.getAccounts().join();
+
+        IAccount account = null;
+        if(!accountsInCache.isEmpty()){
+             account = accountsInCache.iterator().next();
+        }
+
+        IAuthenticationResult result;
+        try {
+            SilentParameters silentParameters =
+                    SilentParameters
+                        .builder(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"))
+                        .account(account)
+                        .build();
+
+                result = _publicClientApplication.acquireTokenSilently(silentParameters).join();
+        } catch (Exception ex) {
+            if (ex.getCause() instanceof MsalException) {
+
+                InteractiveRequestParameters parameters = InteractiveRequestParameters
+                    .builder(new URI("http://localhost"))
+                    .scopes(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"))
+                    .build();
+
+                result = _publicClientApplication.acquireToken(parameters).join();
+            } else {
+                throw ex;
+            }
+        }
+        
+        return result.accessToken();
+    }
+    catch(Exception e)
+    {
+        System.out.println(e.getMessage());
+        return "";
+    }        
+  }
+
   public boolean acceptsURL(String url) throws SQLException {
     return url != null && url.startsWith(DRIVER_URL_PREFIX);
   }
@@ -110,13 +160,19 @@ public class AADJDBCDriver implements java.sql.Driver {
     
     
     if("ActiveDirectoryManagedIdentity".equals(authentication)){
-        String password = generateAuthToken(
+        String password = generateAuthTokenManagedIdentity(
           properties.getProperty(PROPERTY_AAD_CLIENT_ID)
         );    
 
         properties.setProperty(PROPERTY_PASSWORD, password);
     }
+    else if("ActiveDirectoryInteractive".equals(authentication)){
+        String password = generateAuthTokenInteractive(
+          properties.getProperty(PROPERTY_AAD_AUTHORITY)
+        );    
 
+        properties.setProperty(PROPERTY_PASSWORD, password);
+    }
     return _postgreSqlDriver.connect(postgreSQLUrl, properties);
   }
 
@@ -137,6 +193,7 @@ public class AADJDBCDriver implements java.sql.Driver {
     if(info != null) {
       ArrayList<DriverPropertyInfo> infoList = new ArrayList<DriverPropertyInfo>(Arrays.asList(info));
       infoList.add(new DriverPropertyInfo(PROPERTY_AAD_CLIENT_ID, null));
+      infoList.add(new DriverPropertyInfo(PROPERTY_AAD_AUTHORITY, null));
       infoList.add(new DriverPropertyInfo(PROPERTY_AAD_AUTHENTICATION, null));
       info = infoList.toArray(new DriverPropertyInfo[infoList.size()]);
     }

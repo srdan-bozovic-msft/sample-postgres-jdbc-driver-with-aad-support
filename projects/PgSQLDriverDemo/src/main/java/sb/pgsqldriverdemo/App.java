@@ -63,6 +63,25 @@ public class App{
 
         return conn;
     }
+
+    private Connection connectInteractive() {
+        
+        Connection conn = null;
+        try {        
+            String url = "jdbc:postgresqlaad://aaddemopg.postgres.database.azure.com/postgres";
+            Properties props = new Properties();
+            props.setProperty("user", "srbozovi@microsoft.com@aaddemopg");
+            props.setProperty("aadAuthentication", "ActiveDirectoryInteractive");
+            props.setProperty("aadAuthority", "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/");
+            conn = DriverManager.getConnection(url, props);            
+
+            System.out.println("Connected to the PostgreSQL server successfully.");
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+        return conn;
+    }
     
     /**
      * Get PostgreSQLVersion
@@ -70,7 +89,7 @@ public class App{
     public void getVersion() {
         String SQL = "SELECT version();";
 
-        try (Connection conn = connectUAMI();
+        try (Connection conn = connectInteractive();
             Statement stmt = conn.createStatement();
             ResultSet rs = stmt.executeQuery(SQL)) {
             rs.next();
@@ -86,6 +105,8 @@ public class App{
     public static void main(String[] args) {
        
         App app = new App();
+        app.getVersion();
+        app.getVersion();
         app.getVersion();
     }
 }
