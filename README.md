@@ -8,10 +8,11 @@ A JDBC Driver wrapped around the standard PostgreSQL JDBC Driver that provides A
 
 This JDBC driver supports all the Postgre SQL JDBC Driver properties and an additional, Azure AD driver properties.
 
-|Property               |Description                                                                                        |
-|-----------------------|---------------------------------------------------------------------------------------------------|
-|aadAuthentication      |Azure AD acquisition flow - the only currently supported value is _ActiveDirectoryManagedIdentity_ |
-|aadClientId            |Client ID of User-assigned Managed Identity.                                                       |
+|Property               |Description                                                                                                                           |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+|aadAuthentication      |Azure AD acquisition flow - the only currently supported values are _ActiveDirectoryManagedIdentity_ and _ActiveDirectoryInteractive_ |
+|aadClientId            |Client ID of User-assigned Managed Identity.                                                                                          |
+|aadAuthority           |Authority URL that is in the form _https://login.microsoftonline.com/<tenant-id>/_. First part is environment dependent.              |
 
 ## Driver URL
 
