@@ -42,7 +42,6 @@ props.setProperty("aadClientId", "<client-id>");
 conn = DriverManager.getConnection(url, props);            
 Connection connection = DriverManager.getConnection(url, properties);
 ```
-
 ## Active Directory Interactive Example
 
 ```java
@@ -50,7 +49,19 @@ String url = "jdbc:postgresqlaad://<server>.postgres.database.azure.com/<databas
 Properties props = new Properties();
 props.setProperty("user", "<user>@<server>");
 props.setProperty("aadAuthentication", "ActiveDirectoryInteractive");
-props.setProperty("aadAuthority", "https://login.microsoftonline.com/<tenant-id>/");
+props.setProperty("aadTenantId", "<tenant-id>");
+conn = DriverManager.getConnection(url, props);            
+Connection connection = DriverManager.getConnection(url, properties);
+```
+
+## Active Directory Integrated Example
+
+```java
+String url = "jdbc:postgresqlaad://<server>.postgres.database.azure.com/<database>";
+Properties props = new Properties();
+props.setProperty("user", "<user>@<server>");
+props.setProperty("aadAuthentication", "ActiveDirectoryIntegrated");
+props.setProperty("aadTenantId", "<tenant-id>");
 conn = DriverManager.getConnection(url, props);            
 Connection connection = DriverManager.getConnection(url, properties);
 ```

@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.logging.Logger;
 
 import com.microsoft.aad.msal4j.*;
+import javax.security.auth.kerberos.KerberosPrincipal;
 
 public class AADJDBCDriver implements java.sql.Driver {
 
@@ -148,6 +149,56 @@ public class AADJDBCDriver implements java.sql.Driver {
     }        
   }
 
+    public String generateAuthTokenIntegrated(String tenantId) {
+    try
+    { 
+        if(_publicClientApplication == null){
+            String authority = POSTGRESQL_DRIVER_AUTHORITY_BASE + tenantId + "/";
+            _publicClientApplication = PublicClientApplication.builder(POSTGRESQL_DRIVER_APP_ID)
+                .authority(authority)
+                .build();        
+        }
+
+        Set<IAccount> accountsInCache = _publicClientApplication.getAccounts().join();
+
+        IAccount account = null;
+        if(!accountsInCache.isEmpty()){
+             account = accountsInCache.iterator().next();
+        }
+
+        IAuthenticationResult result;
+        try {
+            SilentParameters silentParameters =
+                    SilentParameters
+                        .builder(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"))
+                        .account(account)
+                        .build();
+
+                result = _publicClientApplication.acquireTokenSilently(silentParameters).join();
+        } catch (Exception ex) {
+            if (ex.getCause() instanceof MsalException) {
+                KerberosPrincipal kerberosPrincipal = new KerberosPrincipal("username");
+                String user = kerberosPrincipal.getName();
+                
+                IntegratedWindowsAuthenticationParameters parameters = IntegratedWindowsAuthenticationParameters
+                    .builder(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"), user)
+                    .build();
+
+                result = _publicClientApplication.acquireToken(parameters).join();
+            } else {
+                throw ex;
+            }
+        }
+        
+        return result.accessToken();
+    }
+    catch(Exception e)
+    {
+        System.out.println(e.getMessage());
+        return "";
+    }        
+  }
+
   public boolean acceptsURL(String url) throws SQLException {
     return url != null && url.startsWith(DRIVER_URL_PREFIX);
   }
@@ -171,6 +222,13 @@ public class AADJDBCDriver implements java.sql.Driver {
     }
     else if("ActiveDirectoryInteractive".equals(authentication)){
         String password = generateAuthTokenInteractive(
+          properties.getProperty(PROPERTY_AAD_TENANT_ID)
+        );    
+
+        properties.setProperty(PROPERTY_PASSWORD, password);
+    }
+    else if("ActiveDirectoryIntegrated".equals(authentication)){
+        String password = generateAuthTokenIntegrated(
           properties.getProperty(PROPERTY_AAD_TENANT_ID)
         );    
 

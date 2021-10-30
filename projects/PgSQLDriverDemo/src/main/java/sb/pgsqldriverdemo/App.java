@@ -83,13 +83,32 @@ public class App{
         return conn;
     }
     
+    private Connection connectIntegrated() {
+        System.setProperty("sun.security.jgss.native","true");
+        Connection conn = null;
+        try {        
+            String url = "jdbc:postgresqlaad://aadauthpg.postgres.database.azure.com/postgres";
+            Properties props = new Properties();
+            props.setProperty("user", "PGAADAdmins@aadauthpg");
+            props.setProperty("aadAuthentication", "ActiveDirectoryIntegrated");
+            props.setProperty("aadTenantId", "3312f4d4-a202-41eb-a696-5b3bc1c7ac36");
+            conn = DriverManager.getConnection(url, props);            
+
+            System.out.println("Connected to the PostgreSQL server successfully.");
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+        return conn;
+    }
+    
     /**
      * Get PostgreSQLVersion
      */
     public void getVersion() {
         String SQL = "SELECT version();";
 
-        try (Connection conn = connectInteractive();
+        try (Connection conn = connectIntegrated();
             Statement stmt = conn.createStatement();
             ResultSet rs = stmt.executeQuery(SQL)) {
             rs.next();
