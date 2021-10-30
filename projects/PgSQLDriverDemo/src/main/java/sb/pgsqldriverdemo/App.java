@@ -68,11 +68,11 @@ public class App{
         
         Connection conn = null;
         try {        
-            String url = "jdbc:postgresqlaad://aaddemopg.postgres.database.azure.com/postgres";
+            String url = "jdbc:postgresqlaad://aadauthpg.postgres.database.azure.com/postgres";
             Properties props = new Properties();
-            props.setProperty("user", "srbozovi@microsoft.com@aaddemopg");
+            props.setProperty("user", "PGAADAdmins@aadauthpg");
             props.setProperty("aadAuthentication", "ActiveDirectoryInteractive");
-            props.setProperty("aadAuthority", "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/");
+            props.setProperty("aadTenantId", "3312f4d4-a202-41eb-a696-5b3bc1c7ac36");
             conn = DriverManager.getConnection(url, props);            
 
             System.out.println("Connected to the PostgreSQL server successfully.");
