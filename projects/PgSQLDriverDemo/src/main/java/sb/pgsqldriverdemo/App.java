@@ -108,7 +108,7 @@ public class App{
     public void getVersion() {
         String SQL = "SELECT version();";
 
-        try (Connection conn = connectIntegrated();
+        try (Connection conn = connectSAMI();
             Statement stmt = conn.createStatement();
             ResultSet rs = stmt.executeQuery(SQL)) {
             rs.next();

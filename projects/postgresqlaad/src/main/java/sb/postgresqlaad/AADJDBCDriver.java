@@ -7,6 +7,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 import java.sql.Connection;
 import java.sql.Driver;
@@ -33,11 +35,13 @@ public class AADJDBCDriver implements java.sql.Driver {
   private final static String PROPERTY_AAD_AUTHENTICATION = "aadAuthentication";
   private final static String PROPERTY_AAD_CLIENT_ID = "aadClientId";
   private final static String PROPERTY_AAD_TENANT_ID = "aadTenantId";
-
+  private final static String PROPERTY_AAD_AUTHORITY = "aadAuthority";
+  private final static String PROPERTY_AAD_SCOPE = "aadScope";
+  private final static String PROPERTY_AAD_ENVIRONMENT = "aadEnvironment";
+  
   private final static String POSTGRESQL_DRIVER_ALIAS = ":postgresql:";
   private final static String POSTGRESQL_DRIVER_CLASS= "org.postgresql.Driver";
   private final static String POSTGRESQL_DRIVER_APP_ID = "1950a258-227b-4e31-a9cf-717495945fc2";
-  private final static String POSTGRESQL_DRIVER_AUTHORITY_BASE= "https://login.microsoftonline.com/";
 
   static {
     try {
@@ -54,12 +58,11 @@ public class AADJDBCDriver implements java.sql.Driver {
     _postgreSqlDriver = (Driver) Class.forName(POSTGRESQL_DRIVER_CLASS).newInstance();
   }
 
-  public static String generateAuthTokenManagedIdentity(String clientId) {
+  public static String generateAuthTokenManagedIdentity(String clientId, String scope) {
     try
     {
         String token = null;
-
-        String msiUrl = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fossrdbms-aad.database.windows.net";
+        String msiUrl = "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=" + URLEncoder.encode(scope, StandardCharsets.UTF_8);
         if(clientId != "" && clientId != null){
             msiUrl += "&client_id=" + clientId;
         }
@@ -100,11 +103,11 @@ public class AADJDBCDriver implements java.sql.Driver {
     }        
   }
 
-  public String generateAuthTokenInteractive(String tenantId) {
+  public String generateAuthTokenInteractive(String tenantId, String authorityBase, String scopeBase) {
     try
     { 
         if(_publicClientApplication == null){
-            String authority = POSTGRESQL_DRIVER_AUTHORITY_BASE + tenantId + "/";
+            String authority = authorityBase + tenantId + "/";
             _publicClientApplication = PublicClientApplication.builder(POSTGRESQL_DRIVER_APP_ID)
                 .authority(authority)
                 .build();        
@@ -121,7 +124,7 @@ public class AADJDBCDriver implements java.sql.Driver {
         try {
             SilentParameters silentParameters =
                     SilentParameters
-                        .builder(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"))
+                        .builder(Collections.singleton(scopeBase + "/.default"))
                         .account(account)
                         .build();
 
@@ -131,7 +134,7 @@ public class AADJDBCDriver implements java.sql.Driver {
 
                 InteractiveRequestParameters parameters = InteractiveRequestParameters
                     .builder(new URI("http://localhost"))
-                    .scopes(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"))
+                    .scopes(Collections.singleton(scopeBase + "/.default"))
                     .build();
 
                 result = _publicClientApplication.acquireToken(parameters).join();
@@ -149,11 +152,11 @@ public class AADJDBCDriver implements java.sql.Driver {
     }        
   }
 
-    public String generateAuthTokenIntegrated(String tenantId) {
+    public String generateAuthTokenIntegrated(String tenantId, String authorityBase, String scopeBase) {
     try
     { 
         if(_publicClientApplication == null){
-            String authority = POSTGRESQL_DRIVER_AUTHORITY_BASE + tenantId + "/";
+            String authority = authorityBase + tenantId + "/";
             _publicClientApplication = PublicClientApplication.builder(POSTGRESQL_DRIVER_APP_ID)
                 .authority(authority)
                 .build();        
@@ -170,7 +173,7 @@ public class AADJDBCDriver implements java.sql.Driver {
         try {
             SilentParameters silentParameters =
                     SilentParameters
-                        .builder(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"))
+                        .builder(Collections.singleton(scopeBase + "/.default"))
                         .account(account)
                         .build();
 
@@ -181,7 +184,7 @@ public class AADJDBCDriver implements java.sql.Driver {
                 String user = kerberosPrincipal.getName();
                 
                 IntegratedWindowsAuthenticationParameters parameters = IntegratedWindowsAuthenticationParameters
-                    .builder(Collections.singleton("https://ossrdbms-aad.database.windows.net/.default"), user)
+                    .builder(Collections.singleton(scopeBase + "/.default"), user)
                     .build();
 
                 result = _publicClientApplication.acquireToken(parameters).join();
@@ -202,6 +205,60 @@ public class AADJDBCDriver implements java.sql.Driver {
   public boolean acceptsURL(String url) throws SQLException {
     return url != null && url.startsWith(DRIVER_URL_PREFIX);
   }
+  
+  private static String getAuthority(Properties properties) {
+      String authority = properties.getProperty(PROPERTY_AAD_AUTHORITY);
+      
+      if (authority == null){
+          String environment = properties.getProperty(PROPERTY_AAD_ENVIRONMENT);
+          
+          if(environment == null) {
+            environment = "AzureCloud";              
+          }
+          
+          if("AzureCloud".equals(environment)){
+            authority = "https://login.microsoftonline.com/";
+          }
+          else if("AzureGermanCloud".equals(environment)){
+            authority = "https://login.microsoftonline.de/";              
+          }
+          else if("AzureUSGovernment".equals(environment)){
+            authority = "https://login.microsoftonline.us/";              
+          }
+          else if("AzureChinaCloud".equals(environment)){
+            authority = "https://login.chinacloudapi.cn/";             
+          }    
+      }
+      
+      return authority;
+  }
+  
+    private static String getScope(Properties properties) {
+      String scope = properties.getProperty(PROPERTY_AAD_SCOPE);
+      
+      if (scope == null){
+          String environment = properties.getProperty(PROPERTY_AAD_ENVIRONMENT);
+          
+          if(environment == null) {
+            environment = "AzureCloud";              
+          }
+          
+          if("AzureCloud".equals(environment)){
+            scope = "https://ossrdbms-aad.database.windows.net";
+          }
+          else if("AzureGermanCloud".equals(environment)){
+            scope = "https://ossrdbms-aad.database.cloudapi.de";              
+          }
+          else if("AzureUSGovernment".equals(environment)){
+            scope = "https://ossrdbms-aad.database.usgovcloudapi.net";              
+          }
+          else if("AzureChinaCloud".equals(environment)){
+            scope = "https://ossrdbms-aad.database.chinacloudapi.cn";             
+          }          
+      }
+      
+      return scope;
+  }
 
   public Connection connect(String url, Properties properties) throws SQLException {
     if(!acceptsURL(url)) {
@@ -212,24 +269,26 @@ public class AADJDBCDriver implements java.sql.Driver {
 
     String authentication = properties.getProperty(PROPERTY_AAD_AUTHENTICATION);
     
+    String authority = getAuthority(properties);
+    String scope = getScope(properties);
     
     if("ActiveDirectoryManagedIdentity".equals(authentication)){
         String password = generateAuthTokenManagedIdentity(
-          properties.getProperty(PROPERTY_AAD_CLIENT_ID)
+          properties.getProperty(PROPERTY_AAD_CLIENT_ID), scope
         );    
 
         properties.setProperty(PROPERTY_PASSWORD, password);
     }
     else if("ActiveDirectoryInteractive".equals(authentication)){
         String password = generateAuthTokenInteractive(
-          properties.getProperty(PROPERTY_AAD_TENANT_ID)
+          properties.getProperty(PROPERTY_AAD_TENANT_ID), authority, scope
         );    
 
         properties.setProperty(PROPERTY_PASSWORD, password);
     }
     else if("ActiveDirectoryIntegrated".equals(authentication)){
         String password = generateAuthTokenIntegrated(
-          properties.getProperty(PROPERTY_AAD_TENANT_ID)
+          properties.getProperty(PROPERTY_AAD_TENANT_ID), authority, scope
         );    
 
         properties.setProperty(PROPERTY_PASSWORD, password);
@@ -256,6 +315,9 @@ public class AADJDBCDriver implements java.sql.Driver {
       infoList.add(new DriverPropertyInfo(PROPERTY_AAD_CLIENT_ID, null));
       infoList.add(new DriverPropertyInfo(PROPERTY_AAD_TENANT_ID, null));
       infoList.add(new DriverPropertyInfo(PROPERTY_AAD_AUTHENTICATION, null));
+      infoList.add(new DriverPropertyInfo(PROPERTY_AAD_AUTHORITY, null));
+      infoList.add(new DriverPropertyInfo(PROPERTY_AAD_SCOPE, null));
+      infoList.add(new DriverPropertyInfo(PROPERTY_AAD_ENVIRONMENT, null));
       info = infoList.toArray(new DriverPropertyInfo[infoList.size()]);
     }
     return info;
